@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy
+alembic
+passlib[bcrypt]
+python-jose[cryptography]
+psycopg2-binary      # or your DB driver
+requests
+pydantic
+supabase
