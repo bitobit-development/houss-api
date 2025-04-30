@@ -23,8 +23,9 @@ jobs:
       - name: Run update_plant_inverters
         env:
           PYTHONPATH: ${{ github.workspace }}
-          SUNSYNK_CLIENT_ID:    ${{ secrets.SUNSYNK_CLIENT_ID }}
-          SUNSYNK_SECRET:       ${{ secrets.SUNSYNK_SECRET }}
-          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUNSYNK_CLIENT_ID:      ${{ secrets.SUNSYNK_CLIENT_ID }}
+          SUNSYNK_SECRET:         ${{ secrets.SUNSYNK_SECRET }}
+          SUPABASE_URL:           ${{ secrets.SUPABASE_URL }}
+          # 👇 expose the same secret under the expected var-name
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python -m workflows.update_plant_inverters
