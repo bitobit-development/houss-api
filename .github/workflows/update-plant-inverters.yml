@@ -1,43 +1,30 @@
 name: Update Plant-Inverters (daily)
 
-# ────────────────────────────────────────────────
-# Triggers
-# ────────────────────────────────────────────────
 on:
-  # 00:00 South Africa (UTC+02:00) → 22:00 UTC daily
   schedule:
-    - cron: '0 22 * * *'
-  # Manual “Run workflow” button in the Actions tab
+    - cron: '0 22 * * *'      # 00:00 SAST
   workflow_dispatch:
 
-# ────────────────────────────────────────────────
-# Job definition
-# ────────────────────────────────────────────────
 jobs:
   update-plant-inverters:
     runs-on: ubuntu-latest
-
     steps:
-      # 1️⃣  Pull your repo onto the runner
       - name: Check out code
         uses: actions/checkout@v4
 
-      # 2️⃣  Set up Python 3.11
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # 3️⃣  Install required packages
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
-      # 4️⃣  Execute the sync script
-      - name: Run update_plant_inverters.py
+      - name: Run update_plant_inverters
         env:
+          PYTHONPATH: ${{ github.workspace }}
           SUNSYNK_CLIENT_ID:    ${{ secrets.SUNSYNK_CLIENT_ID }}
           SUNSYNK_SECRET:       ${{ secrets.SUNSYNK_SECRET }}
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python workflows/update_plant_inverters.py
+        run: python -m workflows.update_plant_inverters
