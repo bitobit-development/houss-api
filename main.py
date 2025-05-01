@@ -1,4 +1,6 @@
 # main.py
+# -----------------------------------------------------------------------------
+
 import os
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,7 +21,11 @@ from clients.supabase.tables.residential_estates import (
     update_residential_estate,
     delete_residential_estate,
 )
-
+from clients.supabase.tables.estate_plant import (
+    get_estate_plant,   # ← NEW
+    get_estate_plant_totals,
+    get_offline_plants,
+)
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI & CORS
 # ──────────────────────────────────────────────────────────────────────────────
@@ -29,11 +35,12 @@ origins = [
     "http://localhost:3000",                         # local Next.js
     "https://YOUR_NEXTJS_DOMAIN",                    # prod Next.js
     "https://bit2bit.retool.com",                    # Retool
-    "https://36437237-d437-4d3f-bf19-5b13320612df-00-2mvuymb9892lc.riker.replit.dev",
+    "https://36437237-d437-4d3f-bf19-5b13320612df-00-2mvuymb9892lc.riker.replit.dev",  # ← NEW origin kept
+    "https://36437237-d437-4d3f-bf19-5b13320612df-00-2mvuymb9892lc.riker.replit.dev:3001",  # ← NEW origin kept
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,    # ['*'] while debugging if needed
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -195,6 +202,38 @@ def delete_estate(estate_id: int, user=Depends(get_current_user)):
     if getattr(res, "error", None):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=res.error.message)
     return
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Estate-Plant card-view endpoint (NEW)
+# ──────────────────────────────────────────────────────────────────────────────
+@app.get("/db/estate-plants")
+def list_estate_plants(
+    page: int = 1,
+    page_size: int = 30,
+    user=Depends(get_current_user)
+):
+    if page < 1 or page_size < 1 or page_size > 100:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="page must be ≥1 and 1 ≤ page_size ≤ 100",
+        )
+    try:
+        return get_estate_plant(page=page, page_size=page_size)
+    except RuntimeError as err:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(err))
+
+@app.get("/db/estate-plant-totals/{estate_id}")
+def estate_totals(
+    estate_id: int,
+    user = Depends(get_current_user)
+):
+    """
+    Aggregated totals for one residential estate.
+    """
+    try:
+        return get_estate_plant_totals(estate_id)
+    except RuntimeError as err:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(err))
 
 # ──────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
