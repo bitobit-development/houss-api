@@ -27,6 +27,7 @@ class SunsynkClient:
             "areaCode": "sunsynk",
         }
         resp = requests.post(self.AUTH_URL, json=payload)
+        # print("DEBUG login payload →", resp.status_code, resp.text)   # add this
         resp.raise_for_status()
         data = resp.json()["data"]
         self.access_token = data["access_token"]

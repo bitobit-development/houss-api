@@ -1,16 +1,13 @@
-# .github/workflows/update-plant-inverters.yml
-name: Nightly Plant-Inverter Sync   # ← UPDATED workflow name
+name: Hourly Plant-Inverter Sync
 
 on:
   schedule:
-    # 00:00 SAST → 22:00 UTC every day
-    - cron: '0 22 * * *'
+    - cron: '0 * * * *'        # ← every hour, on the hour (UTC)
   workflow_dispatch:
 
 jobs:
   update-plant-inverters:
     runs-on: ubuntu-latest
-
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -26,15 +23,10 @@ jobs:
       - name: Run update_plant_inverters
         env:
           PYTHONPATH: ${{ github.workspace }}
-
-          # ── Sunsynk creds ─────────────────────────
-          SUNSYNK_USERNAME:   ${{ secrets.SUNSYNK_USERNAME }}
-          SUNSYNK_PASSWORD:   ${{ secrets.SUNSYNK_PASSWORD }}
-
-          # ── Supabase creds ────────────────────────
-          SUPABASE_URL:       ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY:       ${{ secrets.SUPABASE_KEY }}
-          USER_EMAIL:         ${{ secrets.USER_EMAIL }}
-          USER_PASSWORD:      ${{ secrets.USER_PASSWORD }}
-
+          SUNSYNK_USERNAME: ${{ secrets.SUNSYNK_USERNAME }}
+          SUNSYNK_PASSWORD: ${{ secrets.SUNSYNK_PASSWORD }}
+          SUPABASE_URL:     ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:     ${{ secrets.SUPABASE_KEY }}
+          USER_EMAIL:       ${{ secrets.USER_EMAIL }}
+          USER_PASSWORD:    ${{ secrets.USER_PASSWORD }}
         run: python -m workflows.update_plant_inverters
