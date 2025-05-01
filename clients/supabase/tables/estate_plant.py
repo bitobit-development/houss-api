@@ -113,7 +113,7 @@ def get_estate_plant_totals(estate_id: int) -> dict:
     resp = (
         supabase
         .table("estate_plant")
-        .select("pac, etoday, etotal, status, efficiency")
+        .select("pac, etoday, etotal, status, efficiency, update_at")
         .eq("estate_id", estate_id)
         .execute()
     )
@@ -123,6 +123,7 @@ def get_estate_plant_totals(estate_id: int) -> dict:
     if error:
         raise RuntimeError(error.message)
 
+    # ── numeric aggregates ─────────────────────────────────────
     total_w       = sum(r["pac"]    or 0 for r in rows)
     total_today   = sum(r["etoday"] or 0 for r in rows)
     total_total   = sum(r["etotal"] or 0 for r in rows)
@@ -134,13 +135,20 @@ def get_estate_plant_totals(estate_id: int) -> dict:
         if rows else 0
     )
 
+    # ── most-recent update_at (ISO string) ─────────────────────
+    latest_iso = None
+    if rows:
+        # ISO-8601 strings sort chronologically, so max() gives newest
+        latest_iso = max(r["update_at"] for r in rows if r.get("update_at"))
+
     return {
-        "total_kw":       total_w / 1000,  # kW
+        "total_kw":       total_w / 1000,
         "total_today":    total_today,
         "total_total":    total_total,
         "offline_count":  offline_count,
         "online_count":   online_count,
         "efficiency_pct": efficiency_pct,
+        "last_update":    latest_iso,   # ← now the newest update_at
     }
 
 # ──────────────────────────────────────────────────────────────────────────
