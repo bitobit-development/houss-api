@@ -2,10 +2,22 @@
 # -----------------------------------------------------------------------------
 
 import os
+from datetime import date
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
+from typing import Optional 
+from datetime import date 
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Estate-plant daily-report helpers
+# ──────────────────────────────────────────────────────────────────────────────
+from clients.supabase.tables.estate_plant_daily_report import (
+    EstatePlantDailyReport,
+    insert_daily_report,
+    get_daily_reports,
+)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Client SDKs
@@ -234,6 +246,62 @@ def estate_totals(
         return get_estate_plant_totals(estate_id)
     except RuntimeError as err:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(err))
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Estate-Plant Daily Report API
+# ──────────────────────────────────────────────────────────────────────────────
+@app.post(
+    "/db/estate-plant-daily-report",
+    status_code=status.HTTP_201_CREATED,
+    response_model=dict,
+)
+def create_daily_report(
+    payload: EstatePlantDailyReport,
+    user=Depends(get_current_user),
+):
+    """
+    Insert **one** snapshot row.
+
+    RLS on `estate_plant_daily_report` requires `user_id = auth.uid()`.
+    If the caller omitted the column we fill it in here.
+    """
+    if payload.user_id is None:
+        payload.user_id = user.id
+
+    return insert_daily_report(payload)
+
+
+@app.get(
+    "/db/estate-plant-daily-report",
+    response_model=dict,  # { rows, total, pageSize, pageNumber }
+)
+def list_daily_reports(
+    estate_id: Optional[int] = None,
+    plant_id:  Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to:   Optional[date] = None,
+    page:      int = 1,
+    page_size: int = 50,
+    user=Depends(get_current_user),
+):
+    """
+    Paginated list with exact total.
+
+    All parameters are optional filters:
+    • estate_id
+    • plant_id
+    • date_from / date_to  (YYYY-MM-DD)
+    """
+    # RLS already restricts rows to this user_id, so just forward filters
+    return get_daily_reports(
+        estate_id=estate_id,
+        plant_id=plant_id,
+        date_from=date_from,
+        date_to=date_to,
+        page=page,
+        page_size=page_size,
+    )
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":

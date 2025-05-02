@@ -1,13 +1,23 @@
+# .github/workflows/hourly-estate-plant.yml
+# ────────────────────────────────────────────────────────────────────────────
+# Hourly Update Estate Plant
+#
+# 1. Sync Sunsynk → public.estate_plant          (update_estate_plant)
+# 2. Snapshot rows  → estate_plant_daily_report  (update_estate_plant_daily_report)
+#
+# Both scripts use the same env-vars (Supabase + Sunsynk credentials).
+# ────────────────────────────────────────────────────────────────────────────
 name: Hourly Update Estate Plant
 
 on:
   schedule:
-    - cron: '0 * * * *'        # ← every hour, on the hour (UTC)
-  workflow_dispatch:
+    - cron: '0 * * * *'        # every hour, on the hour (UTC)
+  workflow_dispatch:           # manual trigger
 
 jobs:
-  update-plant-inverters:
+  update-estate-plant:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -20,13 +30,26 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # ─────────────────────────── step 1 ────────────────────────────
       - name: Run update_estate_plant
         env:
-          PYTHONPATH: ${{ github.workspace }}
-          SUNSYNK_USERNAME: ${{ secrets.SUNSYNK_USERNAME }}
-          SUNSYNK_PASSWORD: ${{ secrets.SUNSYNK_PASSWORD }}
-          SUPABASE_URL:     ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY:     ${{ secrets.SUPABASE_KEY }}
-          USER_EMAIL:       ${{ secrets.USER_EMAIL }}
-          USER_PASSWORD:    ${{ secrets.USER_PASSWORD }}
+          PYTHONPATH:        ${{ github.workspace }}
+          SUNSYNK_USERNAME:  ${{ secrets.SUNSYNK_USERNAME }}
+          SUNSYNK_PASSWORD:  ${{ secrets.SUNSYNK_PASSWORD }}
+          SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
+          USER_EMAIL:        ${{ secrets.USER_EMAIL }}
+          USER_PASSWORD:     ${{ secrets.USER_PASSWORD }}
         run: python -m workflows.update_estate_plant
+
+      # ─────────────────────────── step 2 ────────────────────────────
+      - name: Snapshot → estate_plant_daily_report
+        env:
+          PYTHONPATH:        ${{ github.workspace }}
+          SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
+          USER_EMAIL:        ${{ secrets.USER_EMAIL }}
+          USER_PASSWORD:     ${{ secrets.USER_PASSWORD }}
+          # optional: override default 1000-row page size
+          SNAPSHOT_PAGE_SIZE: 15000
+        run: python -m workflows.update_estate_plant_daily_report
