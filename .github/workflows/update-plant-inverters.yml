@@ -29,4 +29,4 @@ jobs:
           SUPABASE_KEY:     ${{ secrets.SUPABASE_KEY }}
           USER_EMAIL:       ${{ secrets.USER_EMAIL }}
           USER_PASSWORD:    ${{ secrets.USER_PASSWORD }}
-        run: python -m workflows.update_plant_inverters
+        run: python -m workflows.update_plant_inverters --quiet
