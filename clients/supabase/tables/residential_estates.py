@@ -1,60 +1,89 @@
 # clients/supabase/tables/residential_estates.py
+# -----------------------------------------------------------------------------
+from __future__ import annotations
 
-from typing import Optional
-from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional, Dict, Any
+
+from pydantic import BaseModel, ConfigDict
 from clients.supabase.client import supabase
 
-class EstateIn(BaseModel):
-    """Schema for creating or updating a residential estate."""
-    # replace these with your real column names + types:
-    name: str
-    address: str
-    num_units: Optional[int] = None
-    active: Optional[bool] = True
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Pydantic model – mirrors the DB structure
+# ─────────────────────────────────────────────────────────────────────────────
+class ResidentialEstate(BaseModel):
+    id:               Optional[int]      = None  # generated identity
+    created_at:       Optional[datetime] = None  # default now()
+    estate_name:      Optional[str]      = None
+    physical_address: Optional[str]      = None
+    estate_type:      Optional[str]      = None
+    estate_description: Optional[str]    = None
+    estate_area:      Optional[str]      = None
+
+    # allow extra keys from Supabase without validation errors
+    model_config = ConfigDict(extra='ignore')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
 def get_structure():
-    """Retrieve the column definitions for the `residential_estates` table."""
+    """Return column definitions for residential_estates."""
     return (
         supabase
-        .from_('information_schema.columns')
+        .table('information_schema.columns')
         .select('column_name,data_type,is_nullable,column_default')
         .eq('table_name', 'residential_estates')
         .execute()
     )
 
+
 def get_all_residential_estates():
-    """Fetch all rows from the `residential_estates` table."""
+    """Fetch all rows."""
     return (
         supabase
-        .from_('residential_estates')
+        .table('residential_estates')
         .select('*')
+        .order('id', desc=False)
         .execute()
     )
 
-def insert_residential_estate(data: dict):
-    """Insert a new record into the `residential_estates` table."""
+
+def insert_residential_estate(data: Dict[str, Any] | ResidentialEstate):
+    """Insert one row and return it."""
+    payload = (
+        data.model_dump(exclude_none=True)
+        if isinstance(data, ResidentialEstate) else data
+    )
     return (
         supabase
-        .from_('residential_estates')
-        .insert(data)
+        .table('residential_estates')
+        .insert(payload)
         .execute()
     )
 
-def update_residential_estate(estate_id: int, data: dict):
-    """Update an existing `residential_estates` record."""
+
+def update_residential_estate(estate_id: int, data: Dict[str, Any] | ResidentialEstate):
+    """Update one row by PK and return it."""
+    payload = (
+        data.model_dump(exclude_none=True)
+        if isinstance(data, ResidentialEstate) else data
+    )
     return (
         supabase
-        .from_('residential_estates')
-        .update(data)
+        .table('residential_estates')
+        .update(payload)
         .eq('id', estate_id)
         .execute()
     )
 
+
 def delete_residential_estate(estate_id: int):
-    """Delete a `residential_estates` record by its primary key."""
+    """Delete one row by PK."""
     return (
         supabase
-        .from_('residential_estates')
+        .table('residential_estates')
         .delete()
         .eq('id', estate_id)
         .execute()

@@ -40,7 +40,7 @@ jobs:
           SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
           USER_EMAIL:        ${{ secrets.USER_EMAIL }}
           USER_PASSWORD:     ${{ secrets.USER_PASSWORD }}
-        run: python -m workflows.update_estate_plant
+        run: python workflows/update_estate_plant.py --quiet
 
       # ─────────────────────────── step 2 ────────────────────────────
       - name: Snapshot → estate_plant_daily_report
@@ -52,4 +52,4 @@ jobs:
           USER_PASSWORD:     ${{ secrets.USER_PASSWORD }}
           # optional: override default 1000-row page size
           SNAPSHOT_PAGE_SIZE: 15000
-        run: python -m workflows.update_estate_plant_daily_report
+        run: python -m workflows.update_estate_plant_daily_report --quiet

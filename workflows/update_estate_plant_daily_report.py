@@ -1,53 +1,55 @@
 #!/usr/bin/env python3
+# workflows/update_estate_plant_daily_report.py
 """
-Populate `public.estate_plant_daily_report` with a daily snapshot of every
-row in `estate_plant`.
-
-• Adds `user_id` automatically when running under an authenticated Supabase
-  session (so rows pass RLS).
-• Skips rows that violate unique constraints or RLS.
-• Designed for GitHub Actions: all credentials come from the environment.
-
-Run locally with
-
-    python -m workflows.update_estate_plant_daily_report
+Hourly snapshot of estate_plant → estate_plant_daily_report
+Runs safely in GitHub Actions with minimal log noise.
 """
 
 from __future__ import annotations
-
-import os
-import math
-import logging
+import os, math, logging
 from typing import Any, Dict, List
 
+# ──────────────────────── logging first! ────────────────────────────
+LOG_LEVEL = os.getenv("SNAPSHOT_LOG_LEVEL", "WARNING").upper()
+NUMERIC = getattr(logging, LOG_LEVEL, logging.WARNING)
+
+logging.basicConfig(
+    level=NUMERIC,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+# If you chose WARNING/ERROR/CRITICAL, cut off everything below it
+if NUMERIC >= logging.WARNING:
+    logging.disable(logging.INFO)            # hides INFO & DEBUG globally
+
+# Silence common noisy libs
+for noisy in ("supabase_py", "httpcore", "httpx", "urllib3"):
+    logging.getLogger(noisy).setLevel(logging.ERROR)
+
+log = logging.getLogger(__name__)
+log.info("↪︎ estate_plant_daily_report snapshot started")  # shows only when LOG_LEVEL=INFO
+
+
+# ───────────────────────── app imports ──────────────────────────────
+# (import AFTER configuring logging so their INFO logs obey our rules)
 from clients.supabase.client import supabase, session
 from clients.supabase.tables.estate_plant_daily_report import insert_daily_report
 
-# ───────────────────────────── logging ──────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-)
-log = logging.getLogger(__name__)
 
-# ─────────────────────── env / runtime config ───────────────────────
+# ─────────────────────── runtime knobs ──────────────────────────────
 PAGE_SIZE = int(os.getenv("SNAPSHOT_PAGE_SIZE", "1000"))
+USER_ID   = getattr(session.user, "id", None) if session else None
 
-# current user (None when using the service-role key in CI)
-USER_ID = getattr(session.user, "id", None) if session else None
-log.debug("estate_plant_daily_report user_id=%s", USER_ID)
 
 # ───────────────────────── helpers ──────────────────────────────────
 def build_payload(src: Dict[str, Any]) -> Dict[str, Any]:
-    """Map an estate_plant row → insert-ready payload."""
-    payload: Dict[str, Any] = {
+    p: Dict[str, Any] = {
         "plant_id":   src["id"],
         "name":       src["name"],
         "status":     src["status"],
-        "pac":        float(src["pac"]        or 0),
+        "pac":        float(src["pac"] or 0),
         "efficiency": float(src["efficiency"] or 0),
-        "etoday":     float(src["etoday"]     or 0),
-        "etotal":     float(src["etotal"]     or 0),
+        "etoday":     float(src["etoday"] or 0),
+        "etotal":     float(src["etotal"] or 0),
         "update_at":  src["update_at"],
         "create_at":  src["create_at"],
         "type":       src["type"],
@@ -55,13 +57,12 @@ def build_payload(src: Dict[str, Any]) -> Dict[str, Any]:
         "estate_id":  src["estate_id"],
     }
     if USER_ID:
-        payload["user_id"] = USER_ID
-    return payload
+        p["user_id"] = USER_ID
+    return p
 
 
 def fetch_page(offset: int, limit: int) -> List[Dict[str, Any]]:
-    """Fetch a slice of estate_plant rows (only required columns)."""
-    resp = (
+    r = (
         supabase
         .table("estate_plant")
         .select(
@@ -70,40 +71,37 @@ def fetch_page(offset: int, limit: int) -> List[Dict[str, Any]]:
             update_at, create_at, type, master_id, estate_id
             """
         )
-        .range(offset, offset + limit - 1)        # PostgREST inclusive
+        .range(offset, offset + limit - 1)
         .execute()
     )
-    return getattr(resp, "data", []) or []
+    return getattr(r, "data", []) or []
 
-# ───────────────────────── main workflow ────────────────────────────
+
+# ───────────────────────── main loop ────────────────────────────────
 def main() -> None:
-    # Determine total row count once (head request with count)
-    total_resp = (
+    total = (
         supabase
         .table("estate_plant")
         .select("id", count="exact")
-        .limit(0)        # HEAD-like: no data
+        .limit(0)
         .execute()
+        .count
+        or 0
     )
-    total_rows = getattr(total_resp, "count", 0)
-    pages      = math.ceil(total_rows / PAGE_SIZE) if total_rows else 0
-    # log.info("estate_plant rows=%d → pages=%d (page_size=%d)", total_rows, pages, PAGE_SIZE)
 
-    inserted = skipped = 0
+    pages     = math.ceil(total / PAGE_SIZE) if total else 0
+    inserted  = 0
+    skipped   = 0
+
     for page in range(pages):
-        offset = page * PAGE_SIZE
-        rows   = fetch_page(offset, PAGE_SIZE)
-
-        for raw in rows:
+        for raw in fetch_page(page * PAGE_SIZE, PAGE_SIZE):
             try:
                 insert_daily_report(build_payload(raw))
                 inserted += 1
             except Exception:
-                skipped += 1
+                skipped += 1      # duplicates / RLS rejects / any failure
 
-        # log.info("Processed page %d/%d", page + 1, pages)
-
-    log.info("estate_plant_daily_report ➜ inserted %d, skipped %d", inserted, skipped)
+    log.warning("estate_plant_daily_report ➜ inserted %d, skipped %d", inserted, skipped)
 
 
 if __name__ == "__main__":

@@ -8,3 +8,6 @@ psycopg2-binary      # or your DB driver
 requests
 pydantic
 supabase
+qrcode[pil]
+pillow 
+clients
