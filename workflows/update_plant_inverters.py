@@ -3,10 +3,10 @@
 """
 Upserts all Sunsynk inverters for every plant into Supabase `public.inverters`.
 
-• Logs a single INFO line at start and one summary line at the end
-  (inserted / updated / failed, plant count, duration).
-• Set DEBUG=1 in the environment to see per-plant and per-inverter messages.
-• Exits with status 1 when any inverter operation fails so CI can flag the job.
+Run options
+-----------
+--quiet / --ignore-failures   Suppress DEBUG logs and always exit 0
+--debug                       Show DEBUG logs even if DEBUG env var is not set
 """
 
 from __future__ import annotations
@@ -14,22 +14,34 @@ from __future__ import annotations
 import os
 import sys
 import time
+import argparse
 import logging
 from typing import Dict, Any
 
 from clients.sunsynk.inverters import InverterAPI
-from clients.supabase.client import supabase, session   # `session` carries the JWT
+from clients.supabase.client   import supabase, session
+
+# ────────────────────────── CLI & env ──────────────────────────
+def get_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Upsert Sunsynk inverters→Supabase")
+    p.add_argument("--quiet", action="store_true",
+                   help="Hide DEBUG output and never fail the pipeline")
+    p.add_argument("--ignore-failures", action="store_true",
+                   help="Alias for --quiet (kept for clarity)")
+    p.add_argument("--debug", action="store_true",
+                   help="Force DEBUG output even if DEBUG env is not set")
+    return p.parse_args()
+
+ARGS     = get_args()
+QUIET    = ARGS.quiet or ARGS.ignore_failures
+DEBUG    = (ARGS.debug or os.getenv("DEBUG", "false").lower() in {"1", "true"}) and not QUIET
 
 # ───────────────────────── logging ─────────────────────────
-DEBUG = os.getenv("DEBUG", "false").lower() in {"1", "true"}
-
 logging.basicConfig(
     level=logging.DEBUG if DEBUG else logging.INFO,
     format="%(asctime)s %(levelname).1s %(message)s",
-    force=True,  # ensure our configuration overrides any earlier setup
+    force=True,        # our settings supersede any previous config
 )
-
-# Silence chatty third-party libraries unless we explicitly need their DEBUG
 for noisy in ("supabase_py", "httpx", "httpcore", "urllib3", "asyncio"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
 
@@ -47,8 +59,7 @@ log.debug("Authenticated user_id=%s", USER_ID)
 # ───────────────────── helper functions ────────────────────
 def upsert_inverter(raw: Dict[str, Any], plant_id: int) -> str:
     """
-    INSERT first; on duplicate, UPDATE (respecting RLS).
-    Returns 'inserted' | 'updated' | 'failed'.
+    INSERT first; on duplicate, UPDATE. Returns 'inserted' | 'updated' | 'failed'.
     """
     payload = {
         "id": raw.get("id"),
@@ -72,11 +83,10 @@ def upsert_inverter(raw: Dict[str, Any], plant_id: int) -> str:
         "protocol_identifier": raw.get("protocolIdentifier"),
         "equip_type": raw.get("equipType"),
         "plant_id": plant_id,
+        **({"user_id": USER_ID} if USER_ID else {}),
     }
-    if USER_ID:
-        payload["user_id"] = USER_ID
 
-    # INSERT fast path
+    # INSERT path
     try:
         supabase.table("inverters").insert(payload, upsert=False).execute()
         log.debug("inserted %s", payload["sn"])
@@ -86,15 +96,15 @@ def upsert_inverter(raw: Dict[str, Any], plant_id: int) -> str:
             log.error("insert %s failed: %s", payload["sn"], exc)
             return "failed"
 
-    # UPDATE fallback
+    # UPDATE path
     try:
-        update_payload = payload.copy()
-        update_payload.pop("id", None)  # id is immutable
+        upd = payload.copy()
+        upd.pop("id", None)                       # id immutable
         (
             supabase.table("inverters")
-            .update(update_payload)
+            .update(upd)
             .eq("id", payload["id"])
-            .eq("user_id", USER_ID)      # satisfy RLS
+            .eq("user_id", USER_ID)               # satisfy RLS, if present
             .execute()
         )
         log.debug("updated %s", payload["sn"])
@@ -110,43 +120,44 @@ def main() -> None:
     log.info("update_plant_inverters started")
 
     try:
-        resp = supabase.table("estate_plant").select("id").execute()
-        plants = resp.data or []
+        plant_rows = supabase.table("estate_plant").select("id").execute().data or []
     except Exception as exc:
         log.error("failed to fetch plants: %s", exc)
-        sys.exit(1)
+        sys.exit(1 if not QUIET else 0)
 
     inserted = updated = failed = 0
 
-    for row in plants:
-        plant_id = row["id"]
-        log.debug("plant %s", plant_id)
+    for row in plant_rows:
+        pid = row["id"]
+        log.debug("plant %s", pid)
 
         try:
-            inv_resp = api.list_by_plant(plant_id=plant_id)
-            infos = inv_resp.get("data", {}).get("infos", [])
+            resp = api.list_by_plant(plant_id=pid)
+            if not resp or "data" not in resp:
+                raise ValueError("empty response")
+            infos = resp["data"].get("infos", []) or []
         except Exception as exc:
-            log.error("fetch inverters plant %s error: %s", plant_id, exc)
+            log.error("fetch inverters plant %s error: %s", pid, exc)
             failed += 1
             continue
 
         for inv in infos:
-            outcome = upsert_inverter(inv, plant_id)
-            if outcome == "inserted":
-                inserted += 1
-            elif outcome == "updated":
-                updated += 1
-            else:
-                failed += 1
+            match upsert_inverter(inv, pid):
+                case "inserted":
+                    inserted += 1
+                case "updated":
+                    updated += 1
+                case _:
+                    failed += 1
 
-    duration = time.perf_counter() - start_ts
+    dur = time.perf_counter() - start_ts
     log.info(
         "inverters ➜ inserted=%d updated=%d failed=%d plants=%d duration=%.1fs",
-        inserted, updated, failed, len(plants), duration,
+        inserted, updated, failed, len(plant_rows), dur,
     )
 
-    if failed:
-        sys.exit(1)  # make CI fail so issues are visible
+    if failed and not QUIET:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
