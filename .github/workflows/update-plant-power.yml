@@ -1,0 +1,39 @@
+# .github/workflows/update-plant-power.yml
+# ────────────────────────────────────────────────────────────────────────────
+# 10-Minute Update Plant Power
+#
+# Sync Sunsynk → plant_power_10min every 10 minutes.
+# ────────────────────────────────────────────────────────────────────────────
+name: "10-Minute Update Plant Power"
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'      # every 10 minutes (UTC)
+  workflow_dispatch:           # manual trigger
+
+jobs:
+  update-plant-power:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run update_plant_power
+        env:
+          PYTHONPATH:        ${{ github.workspace }}
+          SUNSYNK_USERNAME:  ${{ secrets.SUNSYNK_USERNAME }}
+          SUNSYNK_PASSWORD:  ${{ secrets.SUNSYNK_PASSWORD }}
+          SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
+          USER_EMAIL:        ${{ secrets.USER_EMAIL }}
+          USER_PASSWORD:     ${{ secrets.USER_PASSWORD }}
+        run: python -m workflows.update_plant_power --quiet
