@@ -1,4 +1,10 @@
 # main.py
+# development point - https://6429f7fa-23e7-4979-9ac6-e6757c619b45-00-3280b19ure2cw.worf.replit.dev/
+# ─────────────────────────────────────────────────────────────────────────────
+#Production point -  https://houss-api-HaimDerazon.replit.app
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 # -----------------------------------------------------------------------------
 # FastAPI entry‑point for HOUSS‑API
 # -----------------------------------------------------------------------------
@@ -23,6 +29,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse  # stream PNG back to caller
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Contacts: Excel → vCard (.vcf) download
+# ────────────────────────────────────────────────────────────────────────────
+from fastapi import UploadFile, File, Response
+
+import pandas as pd
+from typing import List
+
+from clients.utilis.utils_functions import clean_msisdn, make_vcard
 
 
 # Internal SDK / helper imports
@@ -49,7 +65,7 @@ from clients.supabase.tables.estate_plant import (
 from clients.sunsynk.inverters import InverterAPI
 from clients.sunsynk.plants import PlantAPI
 from clients.clickatell.clickatell_client import send_sms, SmsPayload   
-from clients.whatsapp.whatsapp_client import send_whatsapp, WhatsappPayload
+# from clients.whatsapp.whatsapp_client import send_whatsapp, WhatsappPayload
 
 
 
@@ -402,15 +418,104 @@ def sms_send(payload: SmsPayload, user = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(err))
 
 # -----------------------------------------------------------------------------
+# /contacts/upload endpoint to upload contacts from excel
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# /contacts/upload  — Excel → vCard
+# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# /contacts/upload  — Excel → vCard, saved under Vcard/<broker>.vcf
+# ---------------------------------------------------------------------------
+from fastapi import UploadFile, File, Form, Response
+import pandas as pd
+import io
+from pathlib import Path
+from typing import List
+
+from clients.utilis.utils_functions import clean_msisdn, make_vcard
+
+
+@app.post(
+    "/contacts/upload",
+    summary="Upload Excel + broker name → vCard (supports NOTES & EVENT suffix)",
+    response_description="text/vcard file ready for import",
+    status_code=status.HTTP_200_OK,
+)
+async def contacts_upload(
+    broker:      str  = Form(...,  description="Broker name (used for file name)"),
+    phone_type:  str  = Form("iphone", description="iphone (default) or android"),
+    file: UploadFile = File(...,     description=".xlsx / .xls with a header row"),
+    user=Depends(get_current_user),
+):
+    # 1) Extension check ------------------------------------------------------
+    if not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(400, "Upload must be .xlsx or .xls")
+
+    # 2) Read Excel into DataFrame -------------------------------------------
+    try:
+        df = pd.read_excel(io.BytesIO(await file.read()), dtype=str).fillna("")
+    except Exception as exc:
+        raise HTTPException(422, f"Could not parse Excel file ({exc})")
+
+    # 3) Canonicalise column labels ------------------------------------------
+    df.columns = [c.strip().lower() for c in df.columns]
+
+    required = {"name", "surname", "mobile"}
+    missing  = required - set(df.columns)
+    if missing:
+        raise HTTPException(422, f"Missing columns: {', '.join(missing)}")
+
+    for col in ("event", "notes"):
+        if col not in df.columns:
+            df[col] = ""
+
+    # 4) Remove duplicated header rows ---------------------------------------
+    hdr_keywords = {"name", "surname", "mobile"}
+    df = df[
+        ~df.apply(
+            lambda r: {r["name"].lower(), r["surname"].lower(), r["mobile"].lower()} <= hdr_keywords,
+            axis=1,
+        )
+    ]
+
+    # 5) Build vCards ---------------------------------------------------------
+    vcards: List[str] = []
+    for _, row in df.iterrows():
+        base_name = f"{row['name'].strip()} {row['surname'].strip()}".strip()
+        event     = row["event"].strip()
+        full_name = f"{base_name}-{event}" if event else base_name
+
+        tel   = clean_msisdn(row["mobile"])
+        email = row.get("email", "").strip()
+        note  = row.get("notes", "").strip()
+
+        vcards.append(make_vcard(full_name, tel, email, note, phone_type))
+
+    if not vcards:
+        raise HTTPException(422, "No valid contact rows found after header removal")
+
+    vcf_text = "\r\n".join(vcards)
+
+    # 6) Save server-side & return to caller ----------------------------------
+    out_dir = Path("Vcard"); out_dir.mkdir(parents=True, exist_ok=True)
+    broker_safe = broker.strip().lower().replace(" ", "_")
+    file_path = out_dir / f"{broker_safe}.vcf"
+    file_path.write_text(vcf_text, encoding="utf-8")
+
+    headers = {"Content-Disposition": f'attachment; filename="{broker_safe}.vcf"'}
+    return Response(content=vcf_text, media_type="text/vcard", headers=headers)
+
+
+# -----------------------------------------------------------------------------
 # WHATSAPP endpoint (Meta) / SEND MESSAGE
 # -----------------------------------------------------------------------------
-@app.post("/whatsapp/send", status_code=status.HTTP_202_ACCEPTED)
-def whatsapp_send(payload: WhatsappPayload, user=Depends(get_current_user)):
-    try:
-        result = send_whatsapp(phone=payload.phone, message=payload.message)
-        return {"success": True, "whatsapp": result}
-    except RuntimeError as err:
-        raise HTTPException(status_code=400, detail=str(err))
+# @app.post("/whatsapp/send", status_code=status.HTTP_202_ACCEPTED)
+# def whatsapp_send(payload: WhatsappPayload, user=Depends(get_current_user)):
+#     try:
+#         result = send_whatsapp(phone=payload.phone, message=payload.message)
+#         return {"success": True, "whatsapp": result}
+#     except RuntimeError as err:
+#         raise HTTPException(status_code=400, detail=str(err))
 
 
 

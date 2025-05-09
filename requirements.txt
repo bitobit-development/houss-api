@@ -5,9 +5,12 @@ alembic
 passlib[bcrypt]
 python-jose[cryptography]
 psycopg2-binary      # or your DB driver
+python-multipart
+openpyxl
 requests
 pydantic
 supabase
 qrcode[pil]
 pillow 
 clients
+pandas

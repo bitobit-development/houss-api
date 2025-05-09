@@ -3,7 +3,7 @@ modules = ["nodejs-20", "python-3.11"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["cron", "freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "mailutils", "nano", "openjpeg", "tcl", "tk", "zlib"]
+packages = ["cron", "freetype", "glibcLocales", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "mailutils", "nano", "openjpeg", "tcl", "tk", "zlib"]
 
 [unitTest]
 language = "python3"
