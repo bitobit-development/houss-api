@@ -1,28 +1,27 @@
 # clients/sunsynk/plants.py
 # -----------------------------------------------------------------------------
-# Thin wrapper around Sunsynk REST endpoints.
-# Methods:
-#   list(page)      – GET /plants
-#   count()         – GET /user/344476/plantCount (summary counters)
-#   detail(id)      – GET /plant/{id}
-#   realtime(id)    – GET /plant/{id}/realtime
+# Sunsynk plant API wrapper — now uses /plant/energy/{id}/day endpoint.
 # -----------------------------------------------------------------------------
 
 import requests
+from datetime import datetime
+from typing import Optional
+import pytz
+
 from .client import SunsynkClient
 
-# Sunsynk tenant UID is fixed for this project
-TENANT_UID = 344476
+TENANT_UID = 344476  # fixed tenant for HOUSS
+SA_TZ = pytz.timezone("Africa/Johannesburg")
+
 
 class PlantAPI(SunsynkClient):
-    """High-level access to Sunsynk plant endpoints."""
+    """High‑level helper around Sunsynk REST plant endpoints."""
 
-    # ------------------------------------------------------------------
-    # Collections / summaries
-    # ------------------------------------------------------------------
+    # ────────────────────────────────
+    # Collections
+    # ────────────────────────────────
     @SunsynkClient.ensure_token
     def list(self, page: int = 1, limit: int = 30, lan: str = "en"):
-        """Paginated list of plants (30 per page by default)."""
         return requests.get(
             f"{self.BASE_URL}/plants",
             params={"page": page, "limit": limit, "lan": lan},
@@ -32,10 +31,6 @@ class PlantAPI(SunsynkClient):
 
     @SunsynkClient.ensure_token
     def count(self):
-        """Return aggregate counters (total / normal / offline / warnings …).
-
-        Endpoint is fixed to the HOUSS account (UID 344476).
-        """
         return requests.get(
             f"{self.BASE_URL}/user/{TENANT_UID}/plantCount",
             params={"id": TENANT_UID},
@@ -43,9 +38,9 @@ class PlantAPI(SunsynkClient):
             timeout=15,
         ).json()
 
-    # ------------------------------------------------------------------
-    # Single-plant detail / telemetry
-    # ------------------------------------------------------------------
+    # ────────────────────────────────
+    # Single plant
+    # ────────────────────────────────
     @SunsynkClient.ensure_token
     def detail(self, plant_id: int, lan: str = "en"):
         return requests.get(
@@ -59,7 +54,26 @@ class PlantAPI(SunsynkClient):
     def realtime(self, plant_id: int, lan: str = "en"):
         return requests.get(
             f"{self.BASE_URL}/plant/{plant_id}/realtime",
-            params={"lan": lan},
+            params={"lan": lan, "id": plant_id},
             headers=self._get_headers(),
             timeout=15,
+        ).json()
+
+    # ---- Day chart (10‑minute resolution) ------------------------------------
+    @SunsynkClient.ensure_token
+    def energy(self, plant_id: int, date_str: Optional[str] = None, lan: str = "en"):
+        """Fetch /plant/energy/{plant_id}/day"""
+        if date_str is None:
+            date_str = datetime.now(SA_TZ).strftime("%Y-%m-%d")
+
+        params = {
+            "lan": lan,
+            "date": date_str,
+            "id": plant_id,
+        }
+        return requests.get(
+            f"{self.BASE_URL}/plant/energy/{plant_id}/day",
+            params=params,
+            headers=self._get_headers(),
+            timeout=20,
         ).json()
