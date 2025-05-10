@@ -37,7 +37,7 @@ class SunsynkClient:
         self.client_id = client_id
         self.source = source
 
-        # thread‐safe lock for refreshing
+        # thread-safe lock for refreshing
         self._lock = threading.Lock()
 
         # session with retry strategy
@@ -57,7 +57,7 @@ class SunsynkClient:
         self.refresh_token: str = ""
         self.token_expiry: float = 0
 
-        # initial authentication
+        # get initial token
         self._authenticate_with_retry()
 
     def _authenticate_with_retry(self) -> None:
@@ -118,14 +118,27 @@ class SunsynkClient:
     @staticmethod
     def ensure_token(func):
         """
-        Decorator to refresh token if expired before making API calls.
+        Decorator to ensure we have a valid token before any API call.
+        Tries refresh first; if that fails, falls back to full login.
         """
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             with self._lock:
-                if time.time() >= self.token_expiry:
-                    log.info("Access token expired, refreshing...")
-                    self._refresh_token()
+                now = time.time()
+                # No token at all? Do a full auth.
+                if not self.access_token:
+                    log.info("No access token found, authenticating...")
+                    self._authenticate_with_retry()
+
+                # Token expired? Try refresh, else re-authenticate.
+                elif now >= self.token_expiry:
+                    log.info("Access token expired at %s, attempting refresh...", time.ctime(self.token_expiry))
+                    try:
+                        self._refresh_token()
+                    except Exception as exc:
+                        log.warning("Token refresh failed (%s), falling back to full auth", exc)
+                        self._authenticate_with_retry()
+
             return func(self, *args, **kwargs)
         return wrapper
 
