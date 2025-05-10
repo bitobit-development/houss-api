@@ -187,7 +187,8 @@ def ingest(mode: str = "energy") -> int:
 
     log.info("Found %d plants across %d pages", len(plants), pages)
 
-    # 3. Ingest per plant
+    # 3. Ingest per plant id
+    
     total_rows = 0
     for pid in plants:
         try:
