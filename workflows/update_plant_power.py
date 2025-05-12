@@ -10,7 +10,7 @@ This workflow:
  4. Uses the unified `supabase` client (carries JWT or service key).
  5. Re-authenticates to Sunsynk every 25 min.
  6. Refreshes Supabase user session whenever chunk insert begins if older than 25 min.
- 7. Silently skips duplicate-key errors (PostgreSQL 23505). test
+ 7. Silently skips duplicate-key errors (PostgreSQL 23505). test test 
 """
 
 from __future__ import annotations
