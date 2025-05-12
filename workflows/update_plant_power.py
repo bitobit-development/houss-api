@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # workflows/update_plant_power.py
+#python -m workflows.update_plant_power -q
 """
 Synchronise Sunsynk 10-minute power data into Supabase `plant_power_10min`.
 
