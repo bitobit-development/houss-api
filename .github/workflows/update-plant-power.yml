@@ -2,13 +2,13 @@
 # ────────────────────────────────────────────────────────────────────────────
 # 10-Minute Update Plant Power
 #
-# Sync Sunsynk → plant_power_10min every 10 minutes.
+# Sync Sunsynk → plant_power_10min every 30 minutes.
 # ────────────────────────────────────────────────────────────────────────────
 name: "10-Minute Update Plant Power"
 
 on:
   schedule:
-    - cron: '*/300 * * * *'      # every 10 minutes (UTC)
+    - cron: '*/30 * * * *'      # every 30 minutes (UTC)
   workflow_dispatch:           # manual trigger
 
 jobs:
