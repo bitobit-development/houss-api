@@ -8,7 +8,7 @@ name: "10-Minute Update Plant Power"
 
 on:
   schedule:
-    - cron: '*/90 * * * *'      # every 10 minutes (UTC)
+    - cron: '*/300 * * * *'      # every 10 minutes (UTC)
   workflow_dispatch:           # manual trigger
 
 jobs:
