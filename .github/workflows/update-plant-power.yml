@@ -1,14 +1,14 @@
 # .github/workflows/update-plant-power.yml
 # ────────────────────────────────────────────────────────────────────────────
-# 10-Minute Update Plant Power
+# 2-Hourly Update Plant Power
 #
-# Sync Sunsynk → plant_power_10min every 10 minutes.
+# Sync Sunsynk → plant_power every 2 hours.
 # ────────────────────────────────────────────────────────────────────────────
-name: "Hourly Update Plant Power"
+name: "2-Hourly Update Plant Power"
 
 on:
   schedule:
-    - cron: '0 * * * *'       # every hour (UTC)
+    - cron: '0 */2 * * *'       # every 2 hours (UTC)
   workflow_dispatch:          # manual trigger
 
 jobs:
@@ -36,4 +36,3 @@ jobs:
           USER_EMAIL:       ${{ secrets.USER_EMAIL }}
           USER_PASSWORD:    ${{ secrets.USER_PASSWORD }}
         run: python -m workflows.update_plant_power -q
-
