@@ -1,15 +1,19 @@
 # .github/workflows/update-plant-power.yml
 # ────────────────────────────────────────────────────────────────────────────
-# 2-Hourly Update Plant Power
-#
-# Sync Sunsynk → plant_power every 2 hours.
+# Daily Update Plant Power (22:00 and 00:00 UTC)
+# Ensures only one instance runs at a time.
 # ────────────────────────────────────────────────────────────────────────────
-name: "2-Hourly Update Plant Power"
+name: "Daily Update Plant Power"
 
 on:
   schedule:
-    - cron: '0 */2 * * *'       # every 2 hours (UTC)
-  workflow_dispatch:          # manual trigger
+    - cron: '0 22 * * *'       # every day at 22:00 UTC
+    - cron: '0 0 * * *'        # every day at 00:00 UTC
+  workflow_dispatch:           # manual trigger
+
+concurrency:
+  group: update-plant-power
+  cancel-in-progress: true
 
 jobs:
   update-plant-power:
