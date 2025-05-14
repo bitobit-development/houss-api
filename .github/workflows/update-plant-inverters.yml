@@ -2,8 +2,12 @@ name: Hourly Plant-Inverter Sync
 
 on:
   schedule:
-    - cron: '0 * * * *'        # ← every hour, on the hour (UTC)
+    - cron: '0 * * * *'        # every hour, on the hour (UTC)
   workflow_dispatch:
+
+concurrency:
+  group: update-plant-inverters
+  cancel-in-progress: true
 
 jobs:
   update-plant-inverters:
@@ -22,7 +26,7 @@ jobs:
 
       - name: Run update_plant_inverters
         env:
-          PYTHONPATH: ${{ github.workspace }}
+          PYTHONPATH:       ${{ github.workspace }}
           SUNSYNK_USERNAME: ${{ secrets.SUNSYNK_USERNAME }}
           SUNSYNK_PASSWORD: ${{ secrets.SUNSYNK_PASSWORD }}
           SUPABASE_URL:     ${{ secrets.SUPABASE_URL }}
