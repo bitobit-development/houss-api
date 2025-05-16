@@ -1,6 +1,6 @@
 # .github/workflows/update-plant-power.yml
 # ────────────────────────────────────────────────────────────────────────────
-# Daily Update Plant Power (22:00 and 00:00 UTC)
+# Daily Update Plant Power (22:00 and 00:00 UTC, with a retry 30 min later)
 # Ensures only one instance runs at a time.
 # ────────────────────────────────────────────────────────────────────────────
 name: "Daily Update Plant Power"
@@ -8,7 +8,9 @@ name: "Daily Update Plant Power"
 on:
   schedule:
     - cron: '0 22 * * *'       # every day at 22:00 UTC
+    - cron: '30 22 * * *'      # retry at 22:30 UTC
     - cron: '0 0 * * *'        # every day at 00:00 UTC
+    - cron: '30 0 * * *'       # retry at 00:30 UTC
   workflow_dispatch:           # manual trigger
 
 concurrency:
